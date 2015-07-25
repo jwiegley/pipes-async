@@ -4,7 +4,7 @@
 name:                pipes-async
 version:             0.1.0.0
 synopsis:            A higher-level interface to using concurrency with pipes
-description:         Provides combinators like '(>&>)' for easily adding concurrency.
+description:         Provides combinators like '>&>' for easily adding concurrency.
 homepage:            https://github.com/jwiegley/pipes-async
 license:             BSD3
 license-file:        LICENSE
