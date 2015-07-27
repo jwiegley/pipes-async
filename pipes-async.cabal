@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                pipes-async
-version:             0.1.0
+version:             0.1.1
 synopsis:            A higher-level interface to using concurrency with pipes
 description:         Provides combinators like '>&>' for easily adding concurrency.
 homepage:            https://github.com/jwiegley/pipes-async
@@ -26,13 +26,14 @@ library
     , LambdaCase
     , TypeFamilies
   build-depends:  
-      base          >=4.8 && <4.9
-    , lifted-async  >=0.7 && <0.8
-    , lifted-base   >=0.2 && <0.3
-    , stm           >=2.4 && <2.5
-    , monad-control >=1.0 && <1.1
-    , pipes         >=4.1 && <4.2
-    , pipes-safe    >=2.2.3 && <2.3
+      base              >=4.8   && <4.9
+    , lifted-async      >=0.7   && <0.8
+    , lifted-base       >=0.2   && <0.3
+    , stm               >=2.4   && <2.5
+    , monad-control     >=1.0   && <1.1
+    , transformers-base >=0.4.4 && <0.5
+    , pipes             >=4.1   && <4.2
+    , pipes-safe        >=2.2.3 && <2.3
   default-language:    Haskell2010
 
 test-suite test
@@ -42,14 +43,15 @@ test-suite test
   type: exitcode-stdio-1.0
   ghc-options: -threaded -with-rtsopts "-N2" -Wall
   build-depends:
-      base          >=4.8 && <4.9
-    , lifted-async  >=0.7 && <0.8
-    , lifted-base   >=0.2 && <0.3
-    , stm           >=2.4 && <2.5
-    , monad-control >=1.0 && <1.1
-    , pipes         >=4.1 && <4.2
-    , pipes-safe    >=2.2 && <2.3
-    , hspec         >=1.4
+      base              >=4.8   && <4.9
+    , lifted-async      >=0.7   && <0.8
+    , lifted-base       >=0.2   && <0.3
+    , stm               >=2.4   && <2.5
+    , monad-control     >=1.0   && <1.1
+    , transformers-base >=0.4.4 && <0.5
+    , pipes             >=4.1   && <4.2
+    , pipes-safe        >=2.2   && <2.3
+    , hspec             >=1.4
     , pipes-async
     -- , transformers
     -- , transformers-base

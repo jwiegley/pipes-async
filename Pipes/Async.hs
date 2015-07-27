@@ -12,10 +12,20 @@ import Control.Concurrent.Lifted
 import Control.Concurrent.Async.Lifted
 import Control.Concurrent.STM
 import Control.Monad (liftM)
+import Control.Monad.Base as Base
 import Control.Monad.Trans.Control
 import Pipes
 import Pipes.Internal
-import Pipes.Safe
+import Pipes.Safe as Safe
+
+infixl 7 >&>
+-- | An operator version of `buffer`, which assumes a queue size of 16
+-- elements.
+(>&>) :: (MonadBaseControl IO m, MonadBaseControl IO (Base m), MonadSafe m)
+      => Proxy a' a () b m r    -- ^ Upstream producer
+      -> Proxy () b c' c m r    -- ^ Downstream consumer
+      -> Proxy a' a c' c m r
+(>&>) = buffer 16
 
 -- | A substitute for 'Pipes.>->' that executes both the upstream producer and
 -- downstream consumer in separate threads (see '>&>' for an operator version,
@@ -50,44 +60,43 @@ import Pipes.Safe
 -- downstream threads are canceled at the conclusion of the enclosing
 -- 'MonadSafe' block.
 --
--- Note: Using '>&>' should be a drop-in replacement for 'Pipes.>->' anywhere
--- it is used, without changing the meaning of the pipeline; however, how the
--- composition is associated has an effect on the concurrency. For example, @a
--- >-> (b >&> c)@ causes 'b' and 'c' to be executed concurrently, with effects
--- from 'a' occuring in the parent thread (while 'b' blocks waiting on the
--- response). By contrast, @(a >-> b) >&> c@ executes @a >-> b@ and 'c'
--- concurrently, with nothing happening in the parent thread except to wait on
--- the final result. This will generally be faster since value passing through
--- 'MVar' will not be necessary. This is also the default interpretation of @a
--- >-> b >&> c@, since both operators left-associate at the same level.
+-- Note: Using '>&>' should be a drop-in replacement for 'Pipes.>->' without
+-- changing the meaning of the pipeline; however, how the composition is
+-- associated has an effect on the concurrency. For example, @a >-> (b >&> c)@
+-- causes 'b' and 'c' to be executed concurrently, with effects from 'a'
+-- occuring in the parent thread (while 'b' blocks waiting on the response).
+-- By contrast, @(a >-> b) >&> c@ executes @a >-> b@ and 'c' concurrently,
+-- with nothing happening in the parent thread except to wait on the final
+-- result. This will generally be faster since value passing through 'MVar'
+-- will not be necessary. This is also the default interpretation of @a >-> b
+-- >&> c@, since both operators left-associate at the same level.
 --
 
-buffer :: (MonadBaseControl IO m, MonadBaseControl IO (Base m),
-           MonadSafe m, MonadIO m, MonadMask m)
+buffer :: (MonadBaseControl IO m, MonadBaseControl IO (Base m), MonadSafe m)
        => Int                    -- ^ Number of slots in the bounded queue
        -> Proxy a' a () b m r    -- ^ Upstream producer
        -> Proxy () b c' c m r    -- ^ Downstream consumer
        -> Proxy a' a c' c m r
 buffer sz ups downs = M $ do
-    q   <- liftIO $ newTBQueueIO 3  -- control channel
-    qeb <- liftIO $ newTBQueueIO sz -- bounded queue of 'b' values flowing
-                                   -- from upstream to downstream
-    me <- myThreadId
-    hd <- spawn $ toDowns me q qeb
-    hu <- spawn $ fromUps me q qeb
-
+    -- 'qeb' is a bounded queue of 'b' values flowing from upstream to
+    -- downstream
+    qeb <- Base.liftBase $ newTBQueueIO sz
+    me  <- myThreadId
+    q   <- Base.liftBase $ newTBQueueIO 3  -- control channel
+    hd  <- spawn $ toDowns me q qeb
+    hu  <- spawn $ fromUps me q qeb
     mainLoop q $ \r -> do
         release hu
         release hd
         return $ Pure r
   where
-    spawn f = do
+    spawn f = mask $ \_unmask -> do
         h <- async f
         link h
         register $ cancel h
 
-    readQ q    = liftIO $ atomically $ readTBQueue q
-    writeQ q x = liftIO $ atomically $ writeTBQueue q x
+    readQ q    = Base.liftBase $ atomically $ readTBQueue q
+    writeQ q x = Base.liftBase $ atomically $ writeTBQueue q x
 
     mainLoop q done = loop
       where
@@ -103,7 +112,8 @@ buffer sz ups downs = M $ do
                 M          _   -> error "M never comes from downs"
                 Pure       r   -> done r
 
-    guarded :: (MonadBaseControl IO (Base m), MonadSafe m, MonadCatch m)
+    guarded :: (MonadBaseControl IO m, MonadBaseControl IO (Base m),
+                MonadSafe m)
             => ThreadId
             -> ((Proxy a' a b' b m r -> m ()) -> Proxy a' a b' b m r -> m ())
             -> Proxy a' a b' b m r
@@ -113,8 +123,8 @@ buffer sz ups downs = M $ do
         loop p = f loop p
             `catch` (\e -> case e :: AsyncException of
                 ThreadKilled -> return ()
-                _ -> liftBase $ throwTo parent e)
-            `catch` (\e -> liftBase $ throwTo parent (e :: SomeException))
+                _ -> Safe.liftBase $ throwTo parent e)
+            `catch` (\e -> Safe.liftBase $ throwTo parent (e :: SomeException))
 
     fromUps parent q qeb = flip (guarded parent) ups $ \loop -> \case
         Request a' fa  -> throughVar q (Left . Request a') fa >>= loop
@@ -124,26 +134,15 @@ buffer sz ups downs = M $ do
 
     toDowns parent q qeb = flip (guarded parent) downs $ \loop -> \case
         Request () fb  -> readQ qeb >>= \case
-            Left r  -> writeQ q (Right (Pure r))
+            Left  r -> writeQ q (Right (Pure r))
             Right b -> loop (fb b)
         Respond c  fc' -> throughVar q (Right . Respond c) fc' >>= loop
         M       m      -> m >>= loop
         Pure    r      -> writeQ q (Right (Pure r)) -- this causes exit
 
     throughVar q x f = do
-        var <- newVar
+        var <- newEmptyMVar
         writeQ q $ x $ \v -> M $ do
-            putVar var v
+            putMVar var v
             return $ Pure $ error "(>> M loop) throws this value away"
-        f `liftM` takeVar var
-      where
-        newVar     = liftIO newEmptyTMVarIO
-        putVar v z = liftIO $ atomically $ putTMVar v z
-        takeVar v  = liftIO $ atomically $ takeTMVar v
-
-infixl 7 >&>
-(>&>) :: (MonadBaseControl IO m, MonadBaseControl IO (Base m),
-          MonadSafe m, MonadIO m, MonadMask m)
-      => Proxy a' a () b m r -> Proxy () b c' c m r
-      -> Proxy a' a c' c m r
-(>&>) = buffer 16
+        f `liftM` takeMVar var

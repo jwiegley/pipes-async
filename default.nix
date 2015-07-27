@@ -1,12 +1,12 @@
 { mkDerivation, base, lifted-async, monad-control, pipes
-, pipes-safe, stdenv, stm, hspec
+, pipes-safe, stdenv, stm, hspec, transformers-base
 }:
 mkDerivation {
   pname = "pipes-async";
-  version = "0.1.0;
+  version = "0.1.1";
   src = ./.;
   buildDepends = [
-    base lifted-async monad-control pipes pipes-safe stm
+    base lifted-async monad-control pipes pipes-safe stm transformers-base
   ];
   testDepends = [ hspec ];
   homepage = "https://github.com/jwiegley/pipes-async";
