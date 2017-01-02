@@ -3,7 +3,7 @@
 }:
 mkDerivation {
   pname = "pipes-async";
-  version = "0.1.1";
+  version = "0.1.2";
   src = ./.;
   buildDepends = [
     base lifted-async monad-control pipes pipes-safe stm transformers-base
