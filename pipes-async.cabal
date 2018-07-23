@@ -27,7 +27,7 @@ library
     , TypeFamilies
   build-depends:  
       base              >=4.8   && <5
-    , lifted-async      >=0.7   && <0.10
+    , lifted-async      >=0.7   && <1.0
     , lifted-base       >=0.2   && <0.3
     , stm               >=2.4   && <2.5
     , monad-control     >=1.0   && <1.1
@@ -44,7 +44,7 @@ test-suite test
   ghc-options: -threaded -with-rtsopts "-N2" -Wall
   build-depends:
       base              >=4.8   && <5
-    , lifted-async      >=0.7   && <0.10
+    , lifted-async      >=0.7   && <1.0
     , lifted-base       >=0.2   && <0.3
     , stm               >=2.4   && <2.5
     , monad-control     >=1.0   && <1.1
